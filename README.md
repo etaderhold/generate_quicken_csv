@@ -3,6 +3,7 @@
 Quicken's 2017 Mac version stopped supporting stock price downloads at the end of April 2020. This was the only network feature of the app that I used, and I didn't want to start an annual subscription just to keep these prices reasonably well up to date. Quicken does support CSV imports. I wrote this Perl script to grab data on investments I own from publicly avaliable sources, converting it into Quicken-readable CSV files as needed. 
 
 The script takes a JSON input file with the following format (minus comments, they don't parse).
+
 	{
 		"investments": [
 			# "ticker" type is a regular stock/mutual fund/ETF with a ticker symbol that Yahoo Finance understands.
@@ -42,6 +43,7 @@ The script takes a JSON input file with the following format (minus comments, th
 	}
 
 The script takes one command-line argument: the path to the input JSON file. If it's called input.json, the command to download the CSVs is simply
+
 	perl generate_quicken_csv.pl investments.json
 
 System requirements:
