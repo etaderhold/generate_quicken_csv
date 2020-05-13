@@ -42,7 +42,7 @@ The script takes a JSON input file with the following format (minus comments, th
 		]
 	}
 
-The script takes one command-line argument: the path to the input JSON file. If it's called input.json, the command to download the CSVs is simply
+The script takes one command-line argument: the path to the input JSON file. If it's called investments.json, the command to download the CSVs is simply
 
 	perl generate_quicken_csv.pl investments.json
 
