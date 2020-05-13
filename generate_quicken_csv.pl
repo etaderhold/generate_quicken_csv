@@ -1,13 +1,13 @@
 #!/usr/bin/perl
 
 use JSON::Parse 'json_file_to_perl';
-use Data::Dumper;
 
 my %ids = {};
 my $output_dir = 'csv_out';
 `mkdir $output_dir 2>&1`;
 
-my $investments = json_file_to_perl("investments.json")->{'investments'};
+my $input_file = shift;
+my $investments = json_file_to_perl($input_file)->{'investments'};
 
 foreach my $investment (@$investments) {
 	my $type = $investment -> {'type'};
@@ -64,7 +64,7 @@ sub get_vanguard_trust_csv {
 	my $url = "https://api.vanguard.com/rs/ire/01/pe/fund/$id/price/price-history/.json?range=1Y";
 	print "Downloading history for Vanguard trust fund $description...";
 	`wget --referer=https://investor.vanguard.com/ --no-check-certificate $url -O $json_destination 2>&1`;
-	print "Done\n";
+	print "done\n";
 
 	# Convert JSON to CSV
 	print "Converting JSON for Vanguard fund ID $id to CSV...";
@@ -168,7 +168,6 @@ sub get_precious_metals_csv {
 	print $csv "Date,Close,High,Low,Volume,Open\n";
 	my $ref = json_file_to_perl($json_destination);
 
-
 	foreach my $item (@$ref) {
 		$item -> {'Update_Date'} =~ /Date\((.*)\)/;
 		# Time in milliseconds, convert to seconds.
@@ -183,7 +182,6 @@ sub get_precious_metals_csv {
 	close $csv;
 	`rm $json_destination`;
 	print "...done\n";
-
 }
 
 sub get_url_date_string {
