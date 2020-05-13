@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
 use JSON::Parse 'json_file_to_perl';
+use Data::Dumper;
 
 my %ids = {};
 my $output_dir = 'csv_out';
@@ -37,12 +38,24 @@ foreach my $investment (@$investments) {
 		else {
 			print "Type 'vanguard_529' requires a four-digit ID. Skipping...\n";
 		}
+	} elsif ($type eq 'precious_metals') {
+		my $metal = $investment -> {'metal'};
+		if ($metal =~ /^[GSPL]$/) {
+			my $description = $investment -> {'description'} || $metal;
+			get_precious_metals_csv($metal, $description);
+		}
+		else {
+			print "Type 'precious_metals' requires a one-character metal code. G = Gold, S = Silver, P = Platinum, L = Palladium). Skipping...\n";
+		}
+	} else {
+		print "Type $type not recognized. Skipping...\n";
 	}
 }
 
 sub get_vanguard_trust_csv {
 	my $id = shift;
 	my $description = shift;
+	$description =~ s/\s//g;
 	
 	my $json_destination = "$output_dir/$id.json";
 	my $csv_destination = "$output_dir/$description.csv";
@@ -55,24 +68,25 @@ sub get_vanguard_trust_csv {
 
 	# Convert JSON to CSV
 	print "Converting JSON for Vanguard fund ID $id to CSV...";
-	open CSV, '>', $csv_destination or die "Could not open file for writing.";
-	print CSV "Date,Close,High,Low,Volume,Open\n";
+	open $csv, '>', $csv_destination or die "Could not open file for writing.";
+	print $csv "Date,Close,High,Low,Volume,Open\n";
 	my $ref = json_file_to_perl($json_destination);
 
 	my $prices = $ref->{'nav'}->[0]->{'item'};
 	foreach my $item (@$prices) {
 		my $date = substr $item->{'asOfDate'}, 0, 10;
 		my $price = $item->{'price'};
-		print CSV "$date,$price,0,0,0,0\n";
+		print $csv "$date,$price,0,0,0,0\n";
 	}
-	close CSV;
+	close $csv;
 	`rm $json_destination`;
-	print "...Done\n";
+	print "...done\n";
 }
 
 sub get_yahoo_csv {
 	my $ticker = shift;
 	my $description = shift;
+	$description =~ s/\s//g;
 
 	my $current_time = time();
 	my $year_ago = $current_time - 60 * 60 * 24 * 365;
@@ -87,23 +101,23 @@ sub get_yahoo_csv {
 	print "...done\n";
 
 	# Yahoo will often return a row of "null" values for the current date. Quicken interprets these as zeroes. Strip these out.
-	`grep -v null $destination > $destination_tmp`;
-	`mv $destination_tmp $destination`;
+	`grep -v null "$destination" > "$destination_tmp"`;
+	`mv "$destination_tmp" "$destination"`;
 }
 
 sub get_vanguard_529_csv {
 	my $id = shift;
 	my $description = shift;
+	$description =~ s/\s//g;
 
 	my $html_destination = "$output_dir/$id.html";
 	my $csv_destination = "$output_dir/$description.csv";
 
 	# Download HTML price history from Vanguard
 	my $current_time = time();
-	my $end = get_url_date_string($current_time);
-
 	my $year_ago = $current_time - 60 * 60 * 24 * 365;
 	my $start = get_url_date_string($year_ago);
+	my $end = get_url_date_string($current_time);
 
 	my $url = "https://personal.vanguard.com/us/funds/tools/pricehistorysearch?radio=1&results=get&FundType=529Plans&FundIntExt=INT&FundId=$id&fundName=$id&radiobutton2=1&beginDate=$start&endDate=$end&year=#res";
 	my $command = "wget --no-check-certificate \"$url\" -O $html_destination";
@@ -126,7 +140,50 @@ sub get_vanguard_529_csv {
 	close $csv;
 
 	`rm $html_destination`;
-	print "...Done\n";
+	print "...done\n";
+}
+
+sub get_precious_metals_csv {
+	my $metal = shift;
+	my $description = shift;
+
+	my $json_destination = "$output_dir/$metal.json";
+	my $csv_destination = "$output_dir/$description.csv";
+
+	my $current_time = time();
+	my $year_ago = $current_time - 60 * 60 * 24 * 365;
+	my $start = get_url_date_string($year_ago);
+	my $end = get_url_date_string($current_time);
+
+	my $url = "https://www.amark.com/feeds/spothistory";
+	my $postdata = "comCode=$metal&startDate=$start&endDate=$end&groupBy=day";
+
+	print "Downloading precious metals history for $description...";
+	`wget --no-check-certificate "$url" --post-data="$postdata" -O $json_destination 2>&1`;
+	print "...done\n";
+
+	# Convert JSON to CSV
+	print "Converting JSON for precious metal $description to CSV...";
+	open $csv, '>', $csv_destination or die "Could not open file for writing.";
+	print $csv "Date,Close,High,Low,Volume,Open\n";
+	my $ref = json_file_to_perl($json_destination);
+
+
+	foreach my $item (@$ref) {
+		$item -> {'Update_Date'} =~ /Date\((.*)\)/;
+		# Time in milliseconds, convert to seconds.
+		my $timestamp = $1;
+		my $date = get_csv_date_string($timestamp / 1000);
+		my $price = $item -> {'Bid_Close'};
+		my $high_price = $item -> {'Bid_High'};
+		my $low_price = $item -> {'Bid_Low'};
+		my $open_price = $item -> {'Bid_Open'};
+		print $csv "$date,$price,$high_price,$low_price,0,$open_price\n";
+	}
+	close $csv;
+	`rm $json_destination`;
+	print "...done\n";
+
 }
 
 sub get_url_date_string {
@@ -135,4 +192,12 @@ sub get_url_date_string {
 	$mon++;
 	$year += 1900;
 	return "$mon%2F$mday%2F$year";
+}
+
+sub get_csv_date_string {
+	my $time = shift;
+	my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime($time);
+	$mon++;
+	$year += 1900;
+	return "$mon/$mday/$year";
 }
