@@ -47,6 +47,10 @@ foreach my $investment (@$investments) {
 		else {
 			print "Type 'precious_metals' requires a one-character metal code. G = Gold, S = Silver, P = Platinum, L = Palladium). Skipping...\n";
 		}
+	} elsif ($type eq 'vanguard_daf') {
+		my $id = $investment -> {'id'};
+		my $description = $investment->{'description'} || $id;
+		get_vanguard_daf_csv($id, $description);
 	} else {
 		print "Type $type not recognized. Skipping...\n";
 	}
@@ -81,6 +85,50 @@ sub get_vanguard_trust_csv {
 	close $csv;
 	`rm $json_destination`;
 	print "...done\n";
+}
+
+sub get_vanguard_daf_csv {
+	my $id = shift;
+	my $description = shift;
+	$description =~ s/\s//g;
+
+	my $token_destination = "$output_dir/$id.token.json";
+	my $history_json_destination = "$output_dir/$id.history.json";
+	my $csv_destination = "$output_dir/$description.csv";
+
+	print "Downloading history for Vanguard DAF fund $description...";
+	# Get access token
+	my $header = 'Authorization: Basic ZG9ub3JQb3J0YWxVSTpzZWNyZXQ=';
+	my $post_data = 'grant_type=password&client_id=donorPortalUI&client_secret=secret&username=pwuser&password=Tomy%401234';
+	my $token_url = 'https://www.vanguardcharitable.org/donor-portal/api/oauth/token';
+	`wget --header='$header' --post-data='$post_data' $token_url -O $token_destination 2>&1`;
+	my $token = json_file_to_perl($token_destination)->{'access_token'};
+	print "auth token done...";
+
+	# Get price history
+	$header = "Authorization: Bearer $token";
+	my $start_date = get_csv_date_string(time - 60 * 60 * 24 * 365);
+	my $end_date = get_csv_date_string(time);
+	print "$start_date $end_date ";
+	my $history_url = "https://www.vanguardcharitable.org/donor-portal/api/investmentOptions/findHistoricalNAVByPoolIdsAndStartDateAndEndDate?firstPoolId=$id&secondPoolId=11&startDateStr=$start_date&endDateStr=$end_date&isIOD=true";
+	`wget --header='$header' --no-check-certificate '$history_url' -O $history_json_destination 2>&1`;
+	print "price history done.\n";
+
+	print "Converting DAF history to CSV...";
+	my $history = json_file_to_perl($history_json_destination)->{$id}->{'prices'};
+	open $csv, '>', $csv_destination or die "Could not open file for writing.";
+	print $csv "Date,Close,High,Low,Volume,Open\n";
+
+	my $prices = $ref->{'nav'}->[0]->{'item'};
+	foreach my $line (@$history) {
+		my $date = get_csv_date_string($line->{'date'}/1000);
+		my $price = $line->{'unitPrice'};
+		print $csv "$date,$price,0,0,0,0\n";
+	}
+	close $csv;
+	`rm $token_destination`;
+	`rm $history_json_destination`;
+	print "done\n";
 }
 
 sub get_yahoo_csv {
@@ -197,5 +245,5 @@ sub get_csv_date_string {
 	my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime($time);
 	$mon++;
 	$year += 1900;
-	return "$mon/$mday/$year";
+	return sprintf "%02d/%02d/%4d", $mon, $mday, $year;
 }
