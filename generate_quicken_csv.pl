@@ -109,7 +109,6 @@ sub get_vanguard_daf_csv {
 	$header = "Authorization: Bearer $token";
 	my $start_date = get_csv_date_string(time - 60 * 60 * 24 * 365);
 	my $end_date = get_csv_date_string(time);
-	print "$start_date $end_date ";
 	my $history_url = "https://www.vanguardcharitable.org/donor-portal/api/investmentOptions/findHistoricalNAVByPoolIdsAndStartDateAndEndDate?firstPoolId=$id&secondPoolId=11&startDateStr=$start_date&endDateStr=$end_date&isIOD=true";
 	`wget --header='$header' --no-check-certificate '$history_url' -O $history_json_destination 2>&1`;
 	print "price history done.\n";
