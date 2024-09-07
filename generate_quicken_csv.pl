@@ -101,7 +101,7 @@ sub get_vanguard_daf_csv {
 	my $start_date = get_csv_date_string(time - 60 * 60 * 24 * 365);
 	my $end_date = get_csv_date_string(time);
 	my $history_url = "https://www.vanguardcharitable.org/donor-portal/api/pwuser/findHistoricalNAVByPoolIdsAndStartDateAndEndDate?firstPoolId=$id&secondPoolId=11&startDateStr=$start_date&endDateStr=$end_date&isIOD=true";
-
+print $history_url, "\n";
 	`wget --no-check-certificate '$history_url' -O $history_json_destination 2>&1`;
 	print "price history done.\n";
 
@@ -122,25 +122,47 @@ sub get_vanguard_daf_csv {
 }
 
 sub get_yahoo_csv {
-	my $ticker = shift;
-	my $description = shift;
-	$description =~ s/\s//g;
+        my $ticker = shift;
+        my $description = shift;
+        $description =~ s/\s//g;
 
-	my $current_time = time();
-	my $year_ago = $current_time - 60 * 60 * 24 * 365;
+        my $current_time = time();
+        my $year_ago = $current_time - 60 * 60 * 24 * 365;
 
-	my $url = "https://query1.finance.yahoo.com/v7/finance/download/$ticker?period1=$year_ago&period2=$current_time&interval=1d&events=history";
-	my $destination = "$output_dir/$description.csv";
-	my $destination_tmp = "$destination.tmp";
-	my $user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36";
-	my $command = "wget -U \"$user_agent\" --no-check-certificate \"$url\" -O $destination";
-	print "Downloading history for $ticker from Yahoo...";
-	`$command 2>&1`;
-	print "...done\n";
+        my $url = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?events=capitalGain%7Cdiv%7Csplit&formatted=true&includeAdjustedClose=true&interval=1d&period1=$year_ago&period2=$current_time&symbol=$ticker&userYfid=true&lang=en-US&region=US";
 
-	# Yahoo will often return a row of "null" values for the current date. Quicken interprets these as zeroes. Strip these out.
-	`grep -v null "$destination" > "$destination_tmp"`;
-	`mv "$destination_tmp" "$destination"`;
+
+        print $url, "\n";
+        my $json_destination = "$output_dir/$description.json";
+        my $csv_destination = "$output_dir/$description.csv";
+        my $destination_tmp = "$destination.tmp";
+        my $user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36";
+        my $command = "wget -U \"$user_agent\" --no-check-certificate \"$url\" -O $json_destination";
+        print "Downloading history for $ticker from Yahoo...";
+        `$command 2>&1`;
+        print "...done\n";
+
+	# Convert JSON to CSV
+	print "Converting JSON for ticker $description to CSV...";
+	open $csv, '>', $csv_destination or die "Could not open file for writing.";
+	print $csv "Date,Close,High,Low,Volume,Open\n";
+        my $ref = json_file_to_perl($json_destination);
+
+        my @timestamps = @{$ref -> {'chart'} -> {'result'} -> [0] -> {'timestamp'}};
+
+        for my $i (0..@timestamps-1) {
+        	my $date = get_csv_date_string($timestamps[$i]);
+        	my $indicators = $ref -> {'chart'} -> {'result'} -> [0] -> {'indicators'} -> {'quote'} -> [0];
+        	my $close = $indicators -> {'close'} -> [$i];
+        	my $high = $indicators -> {'high'} -> [$i];
+        	my $low = $indicators -> {'low'} -> [$i];
+        	my $volume = $indicators -> {'volume'} -> [$i];
+        	my $open = $indicators -> {'open'} -> [$i];
+        	print $csv "$date,$close,$high,$low,$volume,$open\n";
+        }
+
+	close $csv;
+	`rm $json_destination`;
 }
 
 sub get_vanguard_529_csv {
@@ -193,7 +215,7 @@ sub get_precious_metals_csv {
 	my $start = get_url_date_string($year_ago);
 	my $end = get_url_date_string($current_time);
 
-	my $url = "https://www.amark.com/feeds/spothistory";
+	my $url = "https://legacy.amark.com/feeds/spothistory";
 	my $postdata = "comCode=$metal&startDate=$start&endDate=$end&groupBy=day";
 
 	print "Downloading precious metals history for $description...";
