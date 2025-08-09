@@ -33,8 +33,8 @@ The script takes a JSON input file with the following format (minus comments, th
 			# "precious_metals" type is for precious metal prices.
 			{
 				"type": "precious_metals",
-				# Required. G for gold, S for silver, P for platinum, and L for palladium
-				"metal": "G",
+				# Required. AU for gold, AG for silver, PT for platinum, and PL for palladium
+				"metal": "AU",
 				# Optional. Used as the file name prefix for the CSV output file.
 				"description": "Gold"
 			}
@@ -50,3 +50,4 @@ System requirements:
 * standard Unix command-line tools (mkdir, mv, rm, grep)
 * perl
 * wget
+* httrack
